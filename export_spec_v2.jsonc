@@ -1,0 +1,51 @@
+{
+  // ファイル生成情報
+  "exported_at": "2025-12-27T20:36:39+09:00", // ファイルが書き出された時刻
+  "app_version": "v1.0.0-dev",
+
+  // リクエスト情報（Human Chat Completionsが受け取った塊の情報）
+  "request": {
+    "last_received_at": "2025-12-27T20:26:09+09:00", // 最新のリクエストを受信した時刻
+    "listening_address": "192.168.10.4:8080", // サーバーがどのアドレスでリッスンしていたか
+    "model": "human",
+    "apikey": "actualapikeystring", // APIキーを実験参加者毎に変えるケースを考え，一応記録しておく．
+  },
+
+  // 会話の中身
+  "messages": [
+    {
+      // メッセージ固有の情報
+      "created_at": "2025-12-27T20:26:09+09:00", // メッセージが生成された時刻（過去ログの場合はnull）
+
+      "role": "user",
+      "text": "こんにちは！この画像を見て。",
+      "images": [{}],
+    },
+    {
+      "created_at": null, // クライアントから送られてきた過去の履歴等のため、生成時刻不明の場合
+      "role": "assistant",
+      "text": "過去の会話です",
+      "images": [],
+    },
+    {
+      "created_at": "2025-12-27T20:26:30+09:00",
+      "role": "assistant",
+      "text": "今日はいい天気ですね！",
+
+      "response_mode": "llm_draft",
+      "drafts": ["こんにちは", "今日はいい天気ですね。", "bbb"],
+      "selected_draft_index": 1,
+      "is_draft_edited": true,
+    },
+  ],
+  "settings": {
+    "is_system_instruction_visible": true, // 「指示プロンプトを非表示」にしていた場合はfalseになる（オペレーターがシステムプロンプトを見ていなかったから変な応答をしてた，等の場合に有用）
+    "copilot": {
+      "prompt": "親切な発話をして",
+      "tools": [], // 利用可能にしたツール
+      "provider": "openai",
+      "endpoint_url": "https://api.openai.com/v1/chat/completions", // カスタムのAIを使っていた場合に備えて記録しておく
+      // チャットログの分析においてcopilotのapiキーは不要なので書かない．
+    },
+  },
+}
