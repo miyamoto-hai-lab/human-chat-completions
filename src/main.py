@@ -23,9 +23,8 @@ async def main(page: ft.Page):
     )
     page.theme_mode = ft.ThemeMode.SYSTEM
 
-    # Initialize Views
     chat_view = ChatView(page)
-    console_view = ConsoleView(page, chat_view)
+    console_view = ConsoleView(page)
 
     # Layout Containers
     def handle_resize(e):

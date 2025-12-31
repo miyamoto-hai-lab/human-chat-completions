@@ -1,22 +1,19 @@
 """
 メイン画面右側のレスポンス構築
 """
-import json
+
 from datetime import datetime
 from os import getenv
-from typing import TYPE_CHECKING
 
 import flet as ft
 
-if TYPE_CHECKING:
-    from view.chat import ChatView
+from model.chat_logging import chat_logger
 
 
 class ConsoleView(ft.Container):
-    def __init__(self, page: ft.Page, chat_view: "ChatView"):
+    def __init__(self, page: ft.Page):
         super().__init__(expand=True, padding=20)
         self.page = page
-        self.chat_view = chat_view
 
         # FilePicker for export
         self.file_picker = ft.FilePicker(on_result=self.on_save_result)
@@ -31,11 +28,13 @@ class ConsoleView(ft.Container):
             on_click=self.export_chat_log,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=5),
-            )
+            ),
         )
 
         # 2. Controls & Mode Switch
-        self.settings_button = ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", disabled=True)
+        self.settings_button = ft.IconButton(
+            ft.Icons.SETTINGS, tooltip="Settings", disabled=True
+        )
 
         self.theme_switch = ft.SegmentedButton(
             selected={ft.ThemeMode.SYSTEM.value},
@@ -59,7 +58,7 @@ class ConsoleView(ft.Container):
             ],
             show_selected_icon=False,
             on_change=self.set_theme,
-            width=400, # Approximate width to match image
+            width=400,  # Approximate width to match image
         )
 
         self.mode_segment = ft.SegmentedButton(
@@ -83,8 +82,8 @@ class ConsoleView(ft.Container):
                 ),
             ],
             show_selected_icon=False,
-            disabled=True, # 実装するまで使用不可
-            width=400, # Approximate width to match image
+            disabled=True,  # 実装するまで使用不可
+            width=400,  # Approximate width to match image
         )
 
         # 3. System Prompt
@@ -107,7 +106,7 @@ class ConsoleView(ft.Container):
             self._create_draft_card("2", "To be implemented"),
             self._create_draft_card("3", "To be implemented"),
         ]
-        
+
         self.regenerate_button = ft.TextButton(
             content=ft.Row([ft.Icon(ft.Icons.REFRESH, size=16), ft.Text("Regenerate")]),
             style=ft.ButtonStyle(color=ft.Colors.BLUE),
@@ -116,34 +115,49 @@ class ConsoleView(ft.Container):
         self.content = ft.Column(
             [
                 self.export_button,
-                ft.Text(f"Log file location: {getenv('FLET_APP_CONSOLE', 'unknown')}", color=ft.Colors.GREY_700),
+                ft.Text(
+                    f"Log file location: {getenv('FLET_APP_CONSOLE', 'unknown')}",
+                    color=ft.Colors.GREY_700,
+                ),
                 ft.Divider(color=ft.Colors.TRANSPARENT, height=10),
-
-                ft.Row([ft.Text("Settings", weight=ft.FontWeight.BOLD), self.theme_switch, self.settings_button], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                
                 ft.Row(
                     [
-                        ft.Text("Response Mode", weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
+                        ft.Text("Settings", weight=ft.FontWeight.BOLD),
+                        self.theme_switch,
+                        self.settings_button,
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.Row(
+                    [
+                        ft.Text(
+                            "Response Mode",
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_700,
+                        ),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 ft.Container(self.mode_segment, padding=ft.padding.only(bottom=20)),
-
                 self.system_prompt,
-                
-                ft.Row([ft.Icon(ft.Icons.ARROW_DOWNWARD, color=ft.Colors.GREY_400)], alignment=ft.MainAxisAlignment.CENTER),
-                
+                ft.Row(
+                    [ft.Icon(ft.Icons.ARROW_DOWNWARD, color=ft.Colors.GREY_400)],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
                 ft.Row(
                     [
-                        ft.Text("COPILOT Draft Candidates", weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
-                        self.regenerate_button
+                        ft.Text(
+                            "COPILOT Draft Candidates",
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_700,
+                        ),
+                        self.regenerate_button,
                     ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-                
                 self.drafts_column,
             ],
-            scroll=ft.ScrollMode.AUTO, # Enable scrolling for console view
+            scroll=ft.ScrollMode.AUTO,  # Enable scrolling for console view
         )
 
     def _create_draft_card(self, index: str, text: str):
@@ -151,7 +165,12 @@ class ConsoleView(ft.Container):
             content=ft.Row(
                 [
                     ft.Container(
-                        content=ft.Text(index, size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_600),
+                        content=ft.Text(
+                            index,
+                            size=12,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.GREY_600,
+                        ),
                         bgcolor=ft.Colors.GREY_200,
                         padding=5,
                         border_radius=5,
@@ -176,50 +195,21 @@ class ConsoleView(ft.Container):
 
     def export_chat_log(self, e):
         now = datetime.now()
-        filename = f"chatlog_{now.strftime('%Y-%m-%dT%H-%M-%S')}.json"
+        filename = f"chatlog_{now.strftime('%Y-%m-%d_%H-%M-%S')}.json"
         self.file_picker.save_file(
-            dialog_title="Save Chat Log",
+            dialog_title="チャットログを保存",
             file_name=filename,
             file_type=ft.FilePickerFileType.CUSTOM,
-            allowed_extensions=["json"]
+            allowed_extensions=["json"],
         )
 
-    def on_save_result(self, e: ft.FilePickerResultEvent):
+    async def on_save_result(self, e: ft.FilePickerResultEvent):
         if not e.path:
             return
-
-        conversations = []
-        # Access the chat view's message list controls
-        for control in self.chat_view.messages_list.controls:
-            if not isinstance(control, ft.Row):
-                continue
-            
-            # Identify role based on alignment
-            # MainAxisAlignment.START -> User (Left)
-            # MainAxisAlignment.END -> Assistant (Right)
-            role = "user" if control.alignment == ft.MainAxisAlignment.START else "assistant"
-            
-            # Extract content from the bubble
-            # Row -> [Bubble(Container)] -> Content(Text)
-            try:
-                bubble = control.controls[0]
-                content_text = bubble.content.value
-                conversations.append({
-                    "role": role,
-                    "content": content_text
-                })
-            except (AttributeError, IndexError):
-                continue
-
-        export_data = {
-            "savetime": datetime.now().isoformat(),
-            "conversations": conversations
-        }
-
         try:
-            with open(e.path, "w", encoding="utf-8") as f:
-                json.dump(export_data, f, indent=4, ensure_ascii=False)
-            
-            self.page.show_snack_bar(ft.SnackBar(content=ft.Text(f"Saved to {e.path}")))
+            await chat_logger.export(chat_logger.last_accessed_chat_index, e.path)
+            e.page.open(ft.SnackBar(content=ft.Text(f"{e.path}に保存しました。")))
         except Exception as ex:
-            self.page.show_snack_bar(ft.SnackBar(content=ft.Text(f"Error saving file: {ex}")))
+            e.page.open(
+                ft.SnackBar(content=ft.Text(f"エクスポートに失敗しました。\n{ex}"))
+            )

@@ -123,6 +123,7 @@ class ChatLogger:
             "system": set(),
             "developer": set(),
         }
+        self.last_accessed_chat_index = 0
 
     def add_on_message_recieved_listener(
         self,
@@ -160,6 +161,7 @@ class ChatLogger:
                 chat["messages"].append(req_messages[i])
         for listener_func in self._on_message_recieved_listeners[req_messages[-1].role]:
             listener_func(chat_index, self.chats[chat_index]["messages"], diff)
+        self.last_accessed_chat_index = chat_index
 
     def add_message(self, chat_index: int, message: ChatMessage):
         original_length = len(self.chats[chat_index]["messages"])
@@ -170,6 +172,7 @@ class ChatLogger:
                 self.chats[chat_index]["messages"],
                 {"added": (original_length,)},
             )
+        self.last_accessed_chat_index = chat_index
 
     def clear_chats(self):
         self.chats.clear()
