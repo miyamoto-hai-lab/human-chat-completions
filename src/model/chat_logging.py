@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
-from typing import Any, Callable, Optional
+from inspect import isawaitable
+from typing import Any, Awaitable, Callable, Optional
 
 from __version__ import VERSION
 from model.api_model import (
@@ -127,7 +128,9 @@ class ChatLogger:
 
     def add_on_message_recieved_listener(
         self,
-        listener: Callable[[str, list[ChatMessage], dict[str, tuple]], None],
+        listener: Callable[
+            [str, list[ChatMessage], dict[str, tuple]], None | Awaitable[None]
+        ],
         roles: set[str] = {"user", "assistant", "system", "developer"},
     ):
         for role in roles:
@@ -135,7 +138,7 @@ class ChatLogger:
                 raise ValueError(f"Invalid role {role}")
             self._on_message_recieved_listeners[role].add(listener)
 
-    def on_message_recieved(
+    async def on_message_recieved(
         self, apikey: str, model: str, messages: list[ChatCompletionRequestMessage]
     ):
         req_messages = [ChatMessage(message) for message in messages]
@@ -160,18 +163,22 @@ class ChatLogger:
                 req_messages[i].created_at = datetime.now()
                 chat["messages"].append(req_messages[i])
         for listener_func in self._on_message_recieved_listeners[req_messages[-1].role]:
-            listener_func(chat_index, self.chats[chat_index]["messages"], diff)
+            res = listener_func(chat_index, self.chats[chat_index]["messages"], diff)
+            if isawaitable(res):
+                await res
         self.last_accessed_chat_index = chat_index
 
-    def add_message(self, chat_index: int, message: ChatMessage):
+    async def add_message(self, chat_index: int, message: ChatMessage):
         original_length = len(self.chats[chat_index]["messages"])
         self.chats[chat_index]["messages"].append(message)
         for listener_func in self._on_message_recieved_listeners[message.role]:
-            listener_func(
+            res = listener_func(
                 chat_index,
                 self.chats[chat_index]["messages"],
                 {"added": (original_length,)},
             )
+            if isawaitable(res):
+                await res
         self.last_accessed_chat_index = chat_index
 
     def clear_chats(self):

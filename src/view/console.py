@@ -194,6 +194,13 @@ class ConsoleView(ft.Container):
             e.control.page.update()
 
     def export_chat_log(self, e):
+        if len(chat_logger.chats) < 1:
+            e.page.open(
+                ft.SnackBar(
+                    content=ft.Text("エクスポートできるメッセージがありません。")
+                )
+            )
+            return
         now = datetime.now()
         filename = f"chatlog_{now.strftime('%Y-%m-%d_%H-%M-%S')}.json"
         self.file_picker.save_file(

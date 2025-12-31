@@ -14,6 +14,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from __version__ import VERSION
+
 # 同じディレクトリにある api_model.py からインポート
 # フォルダ構成が異なる場合（例: modelフォルダ内にある場合）は適宜修正してください
 from model.api_model import (
@@ -32,6 +34,7 @@ from model.api_model import (
     OllamaModel,
     OllamaModelDetails,
 )
+from model.chat_logging import ChatMessage, chat_logger
 
 logger = getLogger(__name__)
 
@@ -42,15 +45,16 @@ class FastAPIServer:
         host: str,
         port: int,
         log_level: str,
-        on_message_received: Callable[[Awaitable[ChatCompletionRequestMessage]], str],
         ssl_keyfile: Optional[str] = None,
         ssl_certfile: Optional[str] = None,
     ):
+        self.wait_for_operator_input = None
+        chat_logger.add_on_message_recieved_listener(self.done_waiting, {"assistant"})
         self.app = FastAPI(
             title="Human Chat Completions",
             summary="OpenAI Chat Completions API compatible API.",
             description="Human Chat Completions is a simple HTTP server that implements the OpenAI Chat Completions API.",
-            version="0.1.0",
+            version=VERSION,
         )
         self.app.add_middleware(
             CORSMiddleware,
@@ -61,7 +65,7 @@ class FastAPIServer:
         )
         self.app.add_api_route(
             "/",
-            self.root,
+            self.echo,
             methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"],
         )
         self.app.add_api_route(
@@ -95,7 +99,7 @@ class FastAPIServer:
             tags=["Ollama Compatibility"],
             summary="List models (Ollama)",
             operation_id="listModelsOllama",
-            response_model=OllamaListModelsResponse
+            response_model=OllamaListModelsResponse,
         )
         self.app.add_exception_handler(404, self.not_found_handler)
         self.config = uvicorn.Config(
@@ -109,7 +113,6 @@ class FastAPIServer:
         )
         self.server = uvicorn.Server(self.config)
         self._thread = None
-        self.on_message_received = on_message_received
         self.port = port
         self.launch_time = time.time()
 
@@ -197,7 +200,7 @@ class FastAPIServer:
     # Endpoints
     # ==========================================
 
-    async def root(self, request: Request):
+    async def echo(self, request: Request):
         return {
             "message": f"Human Chat Completions listening on port {self.port}.\nUsage: POST /chat/completions or /v1/chat/completions.",
             "request": {
@@ -206,7 +209,7 @@ class FastAPIServer:
                 "query_params": request.query_params,
                 "headers": request.headers,
                 "body": await request.body(),
-            }
+            },
         }
 
     async def chat_completions(
@@ -219,9 +222,15 @@ class FastAPIServer:
         """
         # 1. 応答内容の取得（ビジネスロジック呼び出し）
         # ストリーミングの場合でも、現状は「全応答が決まってから流す」方式としています
-        logger.debug(request.messages)
-        response_content = await self.on_message_received(request.messages)
-
+        logger.debug(f"Received request: {request.messages}")
+        self.wait_for_operator_input = asyncio.get_running_loop().create_future()
+        await chat_logger.on_message_recieved(
+            apikey="",
+            model=request.model,
+            messages=request.messages,
+        )
+        response_content = await self.wait_for_operator_input
+        self.wait_for_operator_input = None
         # モデルIDの取得
         model_id = request.model
 
@@ -248,17 +257,19 @@ class FastAPIServer:
                     )
                 ],
             )
-    
+
     async def list_models(self):
         """
         利用可能なモデルのリストを返します。
         """
         return ListModelsResponse(
             data=[
-                Model(id="human", created=int(self.launch_time), owned_by="human-backend"),
+                Model(
+                    id="human", created=int(self.launch_time), owned_by="human-backend"
+                ),
             ]
         )
-    
+
     async def retrieve_model(self, model_id: str):
         """
         特定のモデル情報を取得します。
@@ -277,13 +288,13 @@ class FastAPIServer:
                         "message": f"The model '{model_id}' does not exist",
                         "type": "invalid_request_error",
                         "param": "model",
-                        "code": "model_not_found"
+                        "code": "model_not_found",
                     }
-                }
+                },
             )
-        
+
         return allowed_models[model_id]
-    
+
     async def list_models_ollama(self):
         """
         Ollama互換のモデル一覧エンドポイントです。
@@ -294,7 +305,7 @@ class FastAPIServer:
                     name="human:latest",
                     model="human:latest",
                     modified_at=datetime.fromtimestamp(self.launch_time).isoformat(),
-                    details=OllamaModelDetails()
+                    details=OllamaModelDetails(),
                 ),
             ]
         )
@@ -307,3 +318,12 @@ class FastAPIServer:
                 "message": "Human Chat Completions supports only POST /v1/chat/completions endpoint.",
             },
         )
+
+    async def done_waiting(self, _, messages, diff):
+        if self.wait_for_operator_input and not self.wait_for_operator_input.done():
+            if "added" in diff:
+                message_index = diff["added"][-1]
+            else:
+                message_index = -1
+            operator_input_message = messages[message_index]
+            self.wait_for_operator_input.set_result(operator_input_message.content)
