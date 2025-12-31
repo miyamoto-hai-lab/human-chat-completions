@@ -37,6 +37,13 @@ dependencies = [
   "uvicorn>=0.38.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-mock",
+    "pytest-async"
+]
+
 [tool.flet]
 org = "jp.ac.uec.lab.t-interaction"
 product = "Human Chat Completions"
