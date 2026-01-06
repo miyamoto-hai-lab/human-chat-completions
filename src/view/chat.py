@@ -173,12 +173,11 @@ class ChatView(ft.Container):
 
         # Simple bubble implementation for now
         bubble = ft.Container(
-            content=ft.Text(message, color=text_color),
+            content=ft.Text(message, color=text_color, selectable=True),
             bgcolor=bubble_color,
             border_radius=10,
             padding=10,
-            width=None,  # Allow auto width
-            #     constraints=ft.BoxConstraints(max_width=400), # Max width constraint
+            on_click=lambda e: self.copy_to_clipboard(message),
         )
 
         row = ft.Row(
@@ -261,3 +260,8 @@ class ChatView(ft.Container):
             self.listen_button.disabled = False
             self.listen_button.update()
             self.port_field.update()
+
+    def copy_to_clipboard(self, text: str):
+        self.page.set_clipboard(text)
+        self.page.open(ft.SnackBar(content=ft.Text("テキストをコピーしました")))
+
