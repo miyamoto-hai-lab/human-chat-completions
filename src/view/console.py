@@ -83,7 +83,6 @@ class ConsoleView(ft.Container):
                 ),
             ],
             show_selected_icon=False,
-            disabled=True, # 実装するまで使用不可
             width=400, # Approximate width to match image
         )
 
@@ -96,7 +95,6 @@ class ConsoleView(ft.Container):
             max_lines=5,
             text_size=13,
             border_radius=5,
-            disabled=True,
         )
 
         # 4. Drafts Area
@@ -165,7 +163,6 @@ class ConsoleView(ft.Container):
             border=ft.border.all(1, "outlineVariant"),
             border_radius=8,
             ink=True,
-            disabled=True,
         )
 
     def set_theme(self, e):
