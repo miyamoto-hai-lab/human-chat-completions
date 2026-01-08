@@ -189,14 +189,10 @@ class ConsoleView(ft.Container):
         )
 
     async def regenerate_drafts(self, e):
-        # 1. Get Settings
-        try:
-            provider = self.page.client_storage.get("llm_provider") or "openai"
-            model_name = self.page.client_storage.get("llm_model") or "gpt-4o"
-            api_key = self.page.client_storage.get("llm_api_key")
-        except TimeoutError:
-             self.page.open(ft.SnackBar(content=ft.Text("Error reading settings. Please try again.")))
-             return
+        # 1. Get Settings from Dialog Instance (In-Memory)
+        provider = self.settings_dialog.provider_dropdown.value
+        model_name = self.settings_dialog.model_field.value
+        api_key = self.settings_dialog.api_key_field.value
 
         if not api_key:
             self.page.open(ft.SnackBar(content=ft.Text("Please set API Key in Settings first.")))

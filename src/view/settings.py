@@ -7,7 +7,7 @@ class SettingsDialog(ft.AlertDialog):
     def __init__(self, page: ft.Page):
         self.main_page = page
         
-        # Initialize with defaults (will be updated in show())
+        # Initialize with default values
         self.provider_dropdown = ft.Dropdown(
             label="Provider",
             value="openai",
@@ -57,28 +57,9 @@ class SettingsDialog(ft.AlertDialog):
         self.main_page.close(self)
 
     def save_settings(self, e):
-        self.main_page.client_storage.set("llm_provider", self.provider_dropdown.value)
-        self.main_page.client_storage.set("llm_model", self.model_field.value)
-        self.main_page.client_storage.set("llm_api_key", self.api_key_field.value)
+        # Settings are kept in memory (in control values)
         self.main_page.close(self)
         self.main_page.open(ft.SnackBar(content=ft.Text("Settings saved!")))
 
-    def load_settings(self):
-        try:
-            val_provider = self.main_page.client_storage.get("llm_provider")
-            val_model = self.main_page.client_storage.get("llm_model")
-            val_api_key = self.main_page.client_storage.get("llm_api_key")
-            
-            if val_provider:
-                self.provider_dropdown.value = val_provider
-            if val_model:
-                self.model_field.value = val_model
-            if val_api_key:
-                self.api_key_field.value = val_api_key
-        except Exception:
-            # Fallback if storage not ready or fails
-            pass
-
     def show(self):
-        self.load_settings()
         self.main_page.open(self)
