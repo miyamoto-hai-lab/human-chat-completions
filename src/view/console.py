@@ -4,9 +4,13 @@
 import json
 from datetime import datetime
 from os import getenv
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import flet as ft
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+from model.copilot import Copilot
+from view.settings import SettingsDialog
 
 if TYPE_CHECKING:
     from view.chat import ChatView
@@ -17,6 +21,9 @@ class ConsoleView(ft.Container):
         super().__init__(expand=True, padding=20)
         self.page = page
         self.chat_view = chat_view
+
+        # Initialize settings dialog
+        self.settings_dialog = SettingsDialog(page)
 
         # FilePicker for export
         self.file_picker = ft.FilePicker(on_result=self.on_save_result)
@@ -35,7 +42,11 @@ class ConsoleView(ft.Container):
         )
 
         # 2. Controls & Mode Switch
-        self.settings_button = ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", disabled=True)
+        self.settings_button = ft.IconButton(
+            ft.Icons.SETTINGS, 
+            tooltip="Settings", 
+            on_click=lambda e: self.settings_dialog.show()
+        )
 
         self.theme_switch = ft.SegmentedButton(
             selected={ft.ThemeMode.SYSTEM.value},
@@ -99,7 +110,7 @@ class ConsoleView(ft.Container):
 
         # 4. Drafts Area
         self.drafts_column = ft.Column(spacing=10)
-        # Dummy drafts for visualization
+        # Placeholder
         self.drafts_column.controls = [
             self._create_draft_card("1", "To be implemented"),
             self._create_draft_card("2", "To be implemented"),
@@ -109,6 +120,7 @@ class ConsoleView(ft.Container):
         self.regenerate_button = ft.TextButton(
             content=ft.Row([ft.Icon(ft.Icons.REFRESH, size=16), ft.Text("Regenerate")]),
             style=ft.ButtonStyle(color=ft.Colors.BLUE),
+            on_click=self.regenerate_drafts
         )
 
         self.content = ft.Column(
@@ -145,6 +157,16 @@ class ConsoleView(ft.Container):
         )
 
     def _create_draft_card(self, index: str, text: str):
+        def on_card_click(e):
+            # Paste text into chat input
+            self.chat_view.input_field.disabled = False
+            self.chat_view.input_field.value = text
+            self.chat_view.input_field.update()
+            # Also enable send button if not already
+            self.chat_view.send_button.disabled = False
+            self.chat_view.send_button.bgcolor = ft.Colors.BLUE_600
+            self.chat_view.send_button.update()
+
         return ft.Container(
             content=ft.Row(
                 [
@@ -163,7 +185,98 @@ class ConsoleView(ft.Container):
             border=ft.border.all(1, "outlineVariant"),
             border_radius=8,
             ink=True,
+            on_click=on_card_click,
         )
+
+    async def regenerate_drafts(self, e):
+        # 1. Get Settings
+        try:
+            provider = self.page.client_storage.get("llm_provider") or "openai"
+            model_name = self.page.client_storage.get("llm_model") or "gpt-4o"
+            api_key = self.page.client_storage.get("llm_api_key")
+        except TimeoutError:
+             self.page.open(ft.SnackBar(content=ft.Text("Error reading settings. Please try again.")))
+             return
+
+        if not api_key:
+            self.page.open(ft.SnackBar(content=ft.Text("Please set API Key in Settings first.")))
+            return
+
+        # 2. UI Loading State
+        self.regenerate_button.disabled = True
+        
+        # Preserve structure, update text to Loading...
+        for control in self.drafts_column.controls:
+            if isinstance(control, ft.Container):
+                 # Find text control in the row
+                 # Container -> Row -> [IndexContainer, Text(expand=True)]
+                 try:
+                     text_control = control.content.controls[1]
+                     text_control.value = "Generating..."
+                 except:
+                     pass
+        self.page.update()
+
+        try:
+            # 3. Initialize Copilot
+            copilot = Copilot(model_provider=provider, model_name=model_name, api_key=api_key)
+
+            # 4. Extract History
+            history = [
+                SystemMessage(content=self.system_prompt.value)
+            ]
+            
+            # Extract conversations from ChatView
+            for control in self.chat_view.messages_list.controls:
+                if not isinstance(control, ft.Row):
+                    continue
+                try:
+                    bubble = control.controls[0]
+                    content_text = bubble.content.value
+                    is_user = (control.alignment == ft.MainAxisAlignment.START)
+                    
+                    if is_user:
+                        history.append(HumanMessage(content=content_text))
+                    else:
+                        history.append(AIMessage(content=content_text))
+                except Exception:
+                    continue
+
+            # 5. Generate Response
+            result = await copilot.generate_response(
+                instruction="ユーザーの直前の発言に対する返信候補を生成してください。",
+                history=history
+            )
+
+            # 6. Update UI
+            # Update existing cards instead of replacing to maintain structure if possible,
+            # or just replace using _create_draft_card to be safe.
+            self.drafts_column.controls = [
+                self._create_draft_card("1", result.draft1),
+                self._create_draft_card("2", result.draft2),
+                self._create_draft_card("3", result.draft3),
+            ]
+
+        except Exception as ex:
+            # Show error dialog
+            error_dialog = ft.AlertDialog(
+                title=ft.Text("Error"),
+                content=ft.Text(f"返信候補の生成に失敗しました。\n\n詳細: {ex}"),
+                actions=[
+                    ft.TextButton("OK", on_click=lambda e: self.page.close(error_dialog))
+                ],
+            )
+            self.page.open(error_dialog)
+            
+            # Reset to error state
+            self.drafts_column.controls = [
+                 self._create_draft_card("1", "Generation Failed"),
+                 self._create_draft_card("2", "Generation Failed"),
+                 self._create_draft_card("3", "Generation Failed"),
+            ]
+        finally:
+            self.regenerate_button.disabled = False
+            self.page.update()
 
     def set_theme(self, e):
         # This will be handled by the main app, but we need to expose the event or callback
@@ -217,6 +330,7 @@ class ConsoleView(ft.Container):
             with open(e.path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, indent=4, ensure_ascii=False)
             
-            self.page.show_snack_bar(ft.SnackBar(content=ft.Text(f"Saved to {e.path}")))
+            self.page.open(ft.SnackBar(content=ft.Text(f"Saved to {e.path}")))
         except Exception as ex:
-            self.page.show_snack_bar(ft.SnackBar(content=ft.Text(f"Error saving file: {ex}")))
+            self.page.open(ft.SnackBar(content=ft.Text(f"Error saving file: {ex}")))
+

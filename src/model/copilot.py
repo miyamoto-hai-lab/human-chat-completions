@@ -54,7 +54,8 @@ class Copilot:
             | chat_model.with_structured_output(DraftResponse)
         )
 
-    async def generate_response(self, instruction: str, history: list[dict[str, str]], filter_system_prompt: bool = False):
+    async def generate_response(self, instruction: str, history: list, filter_system_prompt: bool = False):
+        # history should be a list of LangChain BaseMessage (SystemMessage, HumanMessage, AIMessage)
         result: DraftResponse = await self.chain.ainvoke(
             {
                 "messages": history,
@@ -63,7 +64,7 @@ class Copilot:
         )
         return result
     
-    async def generate_response_stream(self, instruction: str, history: list[dict[str, str]], filter_system_prompt: bool = False):
+    async def generate_response_stream(self, instruction: str, history: list, filter_system_prompt: bool = False):
         async for chunk in self.chain.astream(
             {
                 "messages": history,
