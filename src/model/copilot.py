@@ -125,7 +125,7 @@ class DraftResponse(BaseModel):
     draft3: str = Field(..., description="3番目に適切な返信案。")
 
 async def main():
-    copilot = Copilot(model_provider="google-genai", model_name="gemini-2.5-flash", api_key="AIzaSyAwgUn9tyKNnFDOwELMlyup0_44c060tko")
+    copilot = Copilot(model_provider="google-genai", model_name="gemini-2.5-flash")
     async for chunk in copilot.generate_response_stream("ツンデレキャラで話して．", [
         SystemMessage(content="あなたは友達AIです．ユーザとは旧知の仲で，心配性です．語尾は「ロボ」です．"),
         HumanMessage(content="昨日、駅前ですごい転び方しちゃってさ..."),
