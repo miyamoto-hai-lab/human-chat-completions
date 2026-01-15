@@ -162,6 +162,10 @@ class ConsoleView(ft.Container):
             self.chat_view.input_field.disabled = False
             self.chat_view.input_field.value = text
             self.chat_view.input_field.update()
+            
+            # Log the selected draft
+            self.chat_view.add_draft_log(text)
+
             # Also enable send button if not already
             self.chat_view.send_button.disabled = False
             self.chat_view.send_button.bgcolor = ft.Colors.BLUE_600
@@ -294,28 +298,7 @@ class ConsoleView(ft.Container):
         if not e.path:
             return
 
-        conversations = []
-        # Access the chat view's message list controls
-        for control in self.chat_view.messages_list.controls:
-            if not isinstance(control, ft.Row):
-                continue
-            
-            # Identify role based on alignment
-            # MainAxisAlignment.START -> User (Left)
-            # MainAxisAlignment.END -> Assistant (Right)
-            role = "user" if control.alignment == ft.MainAxisAlignment.START else "assistant"
-            
-            # Extract content from the bubble
-            # Row -> [Bubble(Container)] -> Content(Text)
-            try:
-                bubble = control.controls[0]
-                content_text = bubble.content.value
-                conversations.append({
-                    "role": role,
-                    "content": content_text
-                })
-            except (AttributeError, IndexError):
-                continue
+        conversations = self.chat_view.event_log.copy()
 
         export_data = {
             "savetime": datetime.now().isoformat(),

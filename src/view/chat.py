@@ -21,6 +21,8 @@ from model.api_server import FastAPIServer
 class ChatView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__(expand=True)
+        self.event_log = []
+        self.synced_message_count = 0
         self.port_field = ft.TextField(
             value="8000",
             label="PORT",
@@ -154,13 +156,20 @@ class ChatView(ft.Container):
             spacing=0,
         )
     
-    def set_message(self, messages: list[str]):
+    def set_message(self, messages: list[dict]):
+        # UIを再構築する（ログは消さない）
         self.messages_list.controls.clear()
         for message in messages:
-            self._add_message(message["content"], message["role"] != "assistant")
+            self._render_bubble(message["content"], message["role"] != "assistant")
         self.messages_list.update()
 
-    def _add_message(self, message: str, is_user: bool = False, is_response = False):
+    def add_draft_log(self, content: str):
+        """
+        ログ保存用に、画面には表示しないドラフト選択履歴を追加する
+        """
+        self.event_log.append({"role": "draft", "content": content})
+
+    def _render_bubble(self, message: str, is_user: bool = False):
         alignment = (
             ft.MainAxisAlignment.END
             if not is_user
@@ -185,6 +194,15 @@ class ChatView(ft.Container):
             alignment=alignment,
         )
         self.messages_list.controls.append(row)
+
+    def _add_message(self, message: str, is_user: bool = False, is_response = False):
+        # 内部ログに追加
+        role = "user" if is_user else "assistant"
+        self.event_log.append({"role": role, "content": message})
+        self.synced_message_count += 1
+
+        self._render_bubble(message, is_user)
+
         if is_response:
             self.messages_list.update()
             if self.pending_future is not None and not self.pending_future.done():
@@ -221,6 +239,15 @@ class ChatView(ft.Container):
                 messages_json.append(message.model_dump())
             else:
                 continue
+        
+        # event_logに新しいメッセージだけを追記する
+        # synced_message_count は「サーバーと同期済みのメッセージ数」とみなす
+        new_messages = messages_json[self.synced_message_count:]
+        for msg in new_messages:
+             self.event_log.append(msg)
+        
+        self.synced_message_count = len(messages_json)
+
         self.set_message(messages_json)
         self.pending_future = asyncio.get_running_loop().create_future()
         self.input_field.disabled = False
