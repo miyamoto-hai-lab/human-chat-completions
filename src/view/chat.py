@@ -240,11 +240,31 @@ class ChatView(ft.Container):
             else:
                 continue
         
-        # event_logに新しいメッセージだけを追記する
-        # synced_message_count は「サーバーと同期済みのメッセージ数」とみなす
-        new_messages = messages_json[self.synced_message_count:]
-        for msg in new_messages:
-             self.event_log.append(msg)
+        # event_logとmessages_jsonを同期させる
+        # event_logには 'draft' ロールが含まれるが、messages_jsonには含まれない
+        # 先頭から順にマッチングさせ、差異があれば更新、足りなければ追記する
+
+        log_idx = 0
+        msg_idx = 0
+        
+        while msg_idx < len(messages_json):
+            # log_idxが範囲外なら、残りはすべて新規追加
+            if log_idx >= len(self.event_log):
+                self.event_log.append(messages_json[msg_idx])
+                msg_idx += 1
+                log_idx += 1
+                continue
+            
+            # draftはスキップ
+            if self.event_log[log_idx].get("role") == "draft":
+                log_idx += 1
+                continue
+
+            # 既存メッセージの更新
+            # メッセージの内容が更新されている可能性があるため、上書きする
+            self.event_log[log_idx] = messages_json[msg_idx]
+            msg_idx += 1
+            log_idx += 1
         
         self.synced_message_count = len(messages_json)
 
